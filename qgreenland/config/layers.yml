@@ -339,7 +339,7 @@
 # Built environment #
 #####################
 
-- id: populated_places_old
+- id: ne_populated_places
   title: 'Populated Places (old)'
   data_source: populated_places.only
   visible: False
@@ -350,8 +350,8 @@
   file_type: '.shp'
   data_type: 'vector'
 
-- <<: &hdx_hotosm
-  id: health_facilities
+- &hdx_hotosm
+  id: hotosm_health_facilities
   title: 'Health Facilities'
   data_source: hdx_hotosm.health_facilities
   visible: False
@@ -363,49 +363,54 @@
   data_type: 'vector'
 
 - <<: *hdx_hotosm
-  id: airports
+  id: hotosm_airports
   title: 'Airports'
   data_source: hdx_hotosm.airports
   style: airport_point
 - <<: *hdx_hotosm
-  id: seaports
+  id: hotosm_seaports
   title: 'Seaports'
   data_source: hdx_hotosm.seaports
   style: seaport_point
 - <<: *hdx_hotosm
-  id: financial_services
+  id: hotosm_financial_services
   title: 'Financial Services'
   data_source: hdx_hotosm.financial_services
   style: financial_facility_point
 - <<: *hdx_hotosm
-  id: education_facilities
+  id: hotosm_education_facilities
   title: 'Education Facilities'
   data_source: hdx_hotosm.education_facilities
   style: education_facility_point
 - <<: *hdx_hotosm
-  id: populated_places
+  id: hotosm_populated_places
   title: 'Populated Places'
   data_source: hdx_hotosm.populated_places
   visible: True
+  style: null
   # style: 'populated_places'
 - <<: *hdx_hotosm
-  id: points_of_interest
+  id: hotosm_points_of_interest
   title: 'Points of Interest'
   data_source: hdx_hotosm.points_of_interest
   style: points_of_interest
 - <<: *hdx_hotosm
-  id: buildings
+  id: hotosm_buildings
   title: 'Buildings'
   data_source: hdx_hotosm.buildings
+  visible: True
+  style: null
 - <<: *hdx_hotosm
-  id: waterways
+  id: hotosm_waterways
   title: 'Waterways'
   data_source: hdx_hotosm.waterways
+  visible: True
   style: waterway_line
 - <<: *hdx_hotosm
-  id: roads
+  id: hotosm_roads
   title: 'Roads'
   data_source: hdx_hotosm.roads
+  visible: True
   style: road_line
 
 
@@ -1328,7 +1333,7 @@
 # BASEMAPS #
 ############
 
-- id: coastlines
+- id: ne_coastlines
   title: 'Coastlines'
   visible: False
   group_path: 'Basemaps'
@@ -1364,7 +1369,7 @@
   data_type: 'vector'
 
 
-- id: background
+- id: ne_background
   title: 'Background (1km)'
   visible: True
   group_path: 'Basemaps'
@@ -1388,7 +1393,7 @@
 # NOTE: We attempted to add the corresponding NE Ocean layer, but it included
 # holes for small islands which are not present on the land layer, and that was
 # gross so we removed the ocean layer.
-- id: land
+- id: ne_land
   title: 'Land'
   visible: True
   group_path: 'Basemaps'
@@ -1400,7 +1405,7 @@
   data_type: 'vector'
 
 
-- id: ocean
+- id: ne_ocean
   title: 'Ocean'
   visible: True
   group_path: 'Basemaps'
