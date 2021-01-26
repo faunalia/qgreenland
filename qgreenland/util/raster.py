@@ -6,6 +6,8 @@ import tempfile
 import pyproj
 from osgeo import gdal
 from osgeo.gdalconst import GA_ReadOnly
+import rasterio as rio
+import shapely
 
 from qgreenland.config import CONFIG
 
@@ -110,6 +112,40 @@ def _gdalwarp_cut_hack(out_path, inp_path, *, layer_cfg, warp_kwargs):
     with tempfile.TemporaryDirectory() as td:
         step1_tempfn = f'tempfile{os.path.splitext(out_path)[1]}'
         step1_tempfp = os.path.join(td, step1_tempfn)
+
+        # get the source bounds
+        ds = rio.open(inp_path)
+        source_bounds = ds.bounds
+        # reproject the source boudns to EPSG:3413
+        # TODO: support override source bounds.
+        if ds.crs.to_epsg != 3413 or warp_kwargs.get('srcSRS') != warp_kwargs['dstSRS']:
+            # TODO: get the correct format.
+            if srs_str := warp_kwargs.get('srcSRS'):
+                ssrs = pyproj.CRS.from_user_input(srs_str)
+            else:
+                ssrs = ds.crs
+
+            # reproj
+            transformer = pyproj.Transformer.from_crs(ssrs, warp_kwargs['dstSRS'])
+            ulx, uly = transformer.transform(ds.bounds.left, ds.bounds.top)
+            lrx, lry = transformer.transform(ds.bounds.right, ds.bounds.bottom)
+            source_bbox = shapely.geometry.box(ulx, lry, lrx, uly)
+        else:
+            source_bbox = shapely.geometry.box(ds.bounds.left, ds.bounds.bottom, ds.bounds.right, ds.bounds.top)
+
+        # intersect
+        boundary_bbox = shapely.geometry.shape(layer_cfg['boundary']['features'][0]['geometry'])
+        intersection = boundary_bbox.intersection(source_bbox)
+        # import json
+        # with open('/luigi/data/TESTS/source_bbox.geojson', 'w') as f:
+        #     f.write(json.dumps(shapely.geometry.mapping(source_bbox)))
+
+        # with open('/luigi/data/TESTS/boundary_bbox.geojson', 'w') as f:
+        #     f.write(json.dumps(shapely.geometry.mapping(boundary_bbox)))
+
+        breakpoint()
+        # Cut bounds of itersection geom
+        # cut w/ shape of intersection
 
         _gdalwarp(step1_tempfp, inp_path, **step1_kwargs)
         _gdalwarp(out_path, step1_tempfp, **step2_kwargs)
