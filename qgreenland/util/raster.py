@@ -116,9 +116,9 @@ def _gdalwarp_cut_hack(out_path, inp_path, *, layer_cfg, warp_kwargs):
         # get the source bounds
         ds = rio.open(inp_path)
         source_bounds = ds.bounds
-        # reproject the source boudns to EPSG:3413
+        # reproject the source bounds to EPSG:3413
         # TODO: support override source bounds.
-        if ds.crs.to_epsg != 3413 or warp_kwargs.get('srcSRS') != warp_kwargs['dstSRS']:
+        if ds.crs.to_epsg() != 3413 or warp_kwargs.get('srcSRS') != warp_kwargs['dstSRS']:
             # TODO: get the correct format.
             if srs_str := warp_kwargs.get('srcSRS'):
                 ssrs = pyproj.CRS.from_user_input(srs_str)
