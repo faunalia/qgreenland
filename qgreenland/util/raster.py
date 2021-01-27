@@ -134,6 +134,12 @@ def _gdalwarp_cut_hack(out_path, inp_path, *, layer_cfg, warp_kwargs):
                 ssrs = pyproj.CRS.from_user_input(ds.crs.to_wkt())
 
             transformer = pyproj.Transformer.from_crs(ssrs, dsrs, always_xy=True)
+            # TODO: Instead of transforming the corner coordinates and then
+            # making a bbox in WGS84 before intersecting, we need to calculate
+            # the bounding box of the extent of the data after reprojection.
+            # I.e. when reprojecting a rectangle from WGS84 -> polar, we get a
+            # wedge. Instead of using the upper-left and lower-right of the
+            # wedge, we need to calculate the polarstereo bbox that fits the wedge.
             ulx, uly = transformer.transform(
                 ds.bounds.left,
                 ds.bounds.top,
@@ -159,7 +165,6 @@ def _gdalwarp_cut_hack(out_path, inp_path, *, layer_cfg, warp_kwargs):
         if not boundary_bbox.intersects(source_bbox):
             # TODO: Add boundary name to error message; it's not currently part
             # of the config object.
-            # breakpoint()
             raise QgrRuntimeError(
                 f"Data for layer '{layer_cfg['id']}' does not share geographic"
                 ' coverage with selected boundary.'
