@@ -2,7 +2,9 @@ import logging
 import os
 import subprocess
 import tempfile
+from pathlib import Path
 
+import fiona
 import pyproj
 from osgeo import gdal
 from osgeo.gdalconst import GA_ReadOnly
@@ -10,6 +12,7 @@ import rasterio as rio
 import shapely
 
 from qgreenland.config import CONFIG
+from qgreenland.exceptions import QgrRuntimeError
 
 logger = logging.getLogger('luigi-interface')
 
@@ -113,35 +116,85 @@ def _gdalwarp_cut_hack(out_path, inp_path, *, layer_cfg, warp_kwargs):
         step1_tempfn = f'tempfile{os.path.splitext(out_path)[1]}'
         step1_tempfp = os.path.join(td, step1_tempfn)
 
-        # get the source bounds
+        # Get the source bounds
         ds = rio.open(inp_path)
         source_bounds = ds.bounds
-        # reproject the source bounds to EPSG:3413
-        # TODO: support override source bounds.
+
+        # TODO: Extract everything related to bbox intersection to its own
+        # function
+
+        # Reproject the source bounds to EPSG:3413 if needed
+        # TODO: support override source bounds in config
         if ds.crs.to_epsg() != 3413 or warp_kwargs.get('srcSRS') != warp_kwargs['dstSRS']:
             # TODO: get the correct format.
+            dsrs = pyproj.CRS.from_user_input(warp_kwargs['dstSRS'])
             if srs_str := warp_kwargs.get('srcSRS'):
                 ssrs = pyproj.CRS.from_user_input(srs_str)
             else:
-                ssrs = ds.crs
+                ssrs = pyproj.CRS.from_user_input(ds.crs.to_wkt())
 
-            # reproj
-            transformer = pyproj.Transformer.from_crs(ssrs, warp_kwargs['dstSRS'])
-            ulx, uly = transformer.transform(ds.bounds.left, ds.bounds.top)
-            lrx, lry = transformer.transform(ds.bounds.right, ds.bounds.bottom)
-            source_bbox = shapely.geometry.box(ulx, lry, lrx, uly)
+            transformer = pyproj.Transformer.from_crs(ssrs, dsrs, always_xy=True)
+            ulx, uly = transformer.transform(
+                ds.bounds.left,
+                ds.bounds.top,
+                errcheck=True,
+            )
+            lrx, lry = transformer.transform(
+                ds.bounds.right,
+                ds.bounds.bottom,
+                errcheck=True,
+            )
         else:
-            source_bbox = shapely.geometry.box(ds.bounds.left, ds.bounds.bottom, ds.bounds.right, ds.bounds.top)
+            ulx = ds.bounds.left
+            uly = ds.bounds.top
+            lrx = ds.bounds.right
+            lry = ds.bounds.bottom
 
-        # intersect
-        boundary_bbox = shapely.geometry.shape(layer_cfg['boundary']['features'][0]['geometry'])
+        source_bbox = shapely.geometry.box(ulx, lry, lrx, uly)
+
+        # Calculate intersection
+        boundary_bbox = shapely.geometry.shape(
+            layer_cfg['boundary']['features'][0]['geometry']
+        )
+        if not boundary_bbox.intersects(source_bbox):
+            # TODO: Add boundary name to error message; it's not currently part
+            # of the config object.
+            # breakpoint()
+            raise QgrRuntimeError(
+                f"Data for layer '{layer_cfg['id']}' does not share geographic"
+                ' coverage with selected boundary.'
+            )
         intersection = boundary_bbox.intersection(source_bbox)
-        # import json
-        # with open('/luigi/data/TESTS/source_bbox.geojson', 'w') as f:
-        #     f.write(json.dumps(shapely.geometry.mapping(source_bbox)))
 
-        # with open('/luigi/data/TESTS/boundary_bbox.geojson', 'w') as f:
-        #     f.write(json.dumps(shapely.geometry.mapping(boundary_bbox)))
+        import json
+        test_path = Path('/luigi/data/TESTS')
+        test_path.mkdir(parents=True, exist_ok=True)
+        fiona_args = {
+            # 'crs': fiona.crs.from_string(dsrs.to_proj4()),
+            'crs_wkt': dsrs.to_wkt(),
+            # TODO: Would be nice to not have to pass emptydict props every
+            # time! This was why we used fiona instead of making dicts
+            # manually in the first place!
+            'schema': {'geometry': 'Polygon', 'properties': {}},
+            'driver': 'GeoJSON',
+        }
+        with fiona.open(test_path / 'source_bbox.geojson', 'w', **fiona_args) as f:
+            f.write({
+                'geometry': shapely.geometry.mapping(source_bbox),
+                'properties': {},
+            })
+
+        with fiona.open(test_path / 'boundary_bbox.geojson', 'w', **fiona_args) as f:
+            f.write({
+                'geometry': shapely.geometry.mapping(boundary_bbox),
+                'properties': {},
+            })
+
+        with fiona.open(test_path / 'intersection_bbox.geojson', 'w', **fiona_args) as f:
+            f.write({
+                'geometry': shapely.geometry.mapping(intersection),
+                'properties': {},
+            })
 
         breakpoint()
         # Cut bounds of itersection geom
