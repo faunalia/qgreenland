@@ -1,3 +1,5 @@
+# TODO: Rename to errors.py
+
 class QgrVersionError(Exception):
     pass
 
