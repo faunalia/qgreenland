@@ -3,6 +3,8 @@ import subprocess
 
 import geopandas as gpd
 import pandas as pd
+import shapely
+from osgeo import ogr
 
 from qgreenland.exceptions import QgrRuntimeError
 
@@ -72,3 +74,13 @@ def ogr2ogr(in_filepath, out_filepath, **ogr2ogr_kwargs):
         raise RuntimeError(result.stderr)
 
     return result
+
+
+# TODO: Any
+def segmentize_shapely_geom(geom: any, distance: float):
+    wkt = geom.wkt
+    geom = ogr.CreateGeometryFromWkt(wkt)
+    geom.Segmentize(0.02)
+    wkt2 = geom.ExportToWkt()
+
+    return shapely.wkt.loads(wkt2)

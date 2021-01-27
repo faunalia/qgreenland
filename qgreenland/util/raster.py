@@ -6,13 +6,14 @@ from pathlib import Path
 
 import fiona
 import pyproj
-from osgeo import gdal
-from osgeo.gdalconst import GA_ReadOnly
 import rasterio as rio
 import shapely
+from osgeo import gdal
+from osgeo.gdalconst import GA_ReadOnly
 
 from qgreenland.config import CONFIG
 from qgreenland.exceptions import QgrRuntimeError
+from qgreenland.util.vector import segmentize_shapely_geom
 
 logger = logging.getLogger('luigi-interface')
 
@@ -134,23 +135,26 @@ def _gdalwarp_cut_hack(out_path, inp_path, *, layer_cfg, warp_kwargs):
                 ssrs = pyproj.CRS.from_user_input(ds.crs.to_wkt())
 
             transformer = pyproj.Transformer.from_crs(ssrs, dsrs, always_xy=True)
+
             # TODO: Instead of transforming the corner coordinates and then
             # making a bbox in WGS84 before intersecting, we need to calculate
             # the bounding box of the extent of the data after reprojection.
             # I.e. when reprojecting a rectangle from WGS84 -> polar, we get a
             # wedge. Instead of using the upper-left and lower-right of the
             # wedge, we need to calculate the polarstereo bbox that fits the wedge.
-            ulx, uly = transformer.transform(
-                ds.bounds.left,
-                ds.bounds.top,
-                errcheck=True,
+            source_shape = segmentize_shapely_geom(
+                shapely.geometry.box(
+                    ds.bounds.left, ds.bounds.bottom,
+                    ds.bounds.right, ds.bounds.top
+                ),
+                0.02,  # TODO: Calculate this value
             )
-            lrx, lry = transformer.transform(
-                ds.bounds.right,
-                ds.bounds.bottom,
-                errcheck=True,
-            )
+            ulx, lry, lrx, uly = shapely.ops.transform(
+                transformer.transform,
+                source_shape,
+            ).bounds
         else:
+            # We're already in the correct projection
             ulx = ds.bounds.left
             uly = ds.bounds.top
             lrx = ds.bounds.right
